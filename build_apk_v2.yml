@@ -1,0 +1,70 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Download and set up Android command-line tools
+        run: |
+          mkdir -p "$HOME/android-sdk/cmdline-tools"
+          cd "$HOME/android-sdk/cmdline-tools"
+          curl -L -o tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q tools.zip
+          mv cmdline-tools latest
+          echo "ANDROID_HOME=$HOME/android-sdk" >> "$GITHUB_ENV"
+          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$HOME/android-sdk/platform-tools" >> "$GITHUB_PATH"
+
+      - name: Accept licenses and install build-tools
+        run: |
+          yes | sdkmanager --licenses --sdk_root="$HOME/android-sdk" || true
+          sdkmanager --sdk_root="$HOME/android-sdk" "build-tools;34.0.0" "platform-tools"
+
+      - name: Download apktool
+        run: |
+          curl -L -o apktool.jar https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar
+
+      - name: Unzip the decompiled project
+        run: unzip -q base_patched.zip
+
+      - name: Rebuild APK with apktool
+        run: java -jar apktool.jar b base -o app-unsigned.apk
+
+      - name: Create debug keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore debug.keystore \
+            -storepass android -keypass android \
+            -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=MR DIGITAL X, OU=Digital II Computer & Electronics, O=Digital II, L=Karachi, S=Sindh, C=PK"
+
+      - name: Zipalign
+        run: |
+          BUILD_TOOLS="$HOME/android-sdk/build-tools/34.0.0"
+          "$BUILD_TOOLS/zipalign" -f -p 4 app-unsigned.apk app-aligned.apk
+
+      - name: Sign APK
+        run: |
+          BUILD_TOOLS="$HOME/android-sdk/build-tools/34.0.0"
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks debug.keystore --ks-pass pass:android --key-pass pass:android \
+            --out app.apk app-aligned.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-apk
+          path: app.apk
