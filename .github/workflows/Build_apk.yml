@@ -34,7 +34,7 @@ jobs:
 
       - name: Download apktool
         run: |
-          curl -L -o apktool.jar https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar
+          curl -L -o apktool.jar https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.12.1.jar
 
       - name: Unzip the decompiled project
         run: unzip -q base_patched.zip
